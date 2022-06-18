@@ -1,6 +1,3 @@
-
-
-#![allow(dead_code)]
 use core::fmt;
 
 use adorn::adorn_method;
@@ -73,6 +70,7 @@ impl Board {
     pub fn set_cell(&mut self, pos: Position, cell: GameCell) {
         self.cells[pos.y][pos.x] = cell;
     }
+
     pub fn available_moves(&self) -> Vec<Position> {
         let mut moves = Vec::new();
         for y in 0..3 {
@@ -85,7 +83,6 @@ impl Board {
         moves
     }
 
-    #[allow(dead_code)]
     pub fn moves(&self) -> usize {
         let mut moves = 0;
         for k in 0..3 {

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::{
     game::{Game, GameState},
     player::Opponent,
@@ -15,7 +14,6 @@ pub enum AppState {
 }
 
 pub struct App {
-    pub name: String,
     game: Game,
     pub score: Score,
     pub state: AppState,
@@ -45,10 +43,9 @@ impl AddAssign for Score {
 }
 
 impl App {
-    pub fn new(name: String) -> App {
+    pub fn new() -> App {
         let game = Game::new(Opponent::Human);
         App {
-            name,
             game,
             score: Score::new(),
             state: AppState::StartMenu(0),

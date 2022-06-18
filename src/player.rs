@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::game::{Board, GameCell, Position, State};
 use rand::Rng;
 
