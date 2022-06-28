@@ -1,4 +1,7 @@
-use crate::game::{Board, GameCell, Position, State};
+use crate::{
+    game::{Board, GameCell, State},
+    update::Position,
+};
 use rand::Rng;
 
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +46,7 @@ fn minimax(board: &Board, cell: &GameCell) -> Result<Position, String> {
     let mut best_score = i64::min_value();
     for m in board.available_moves().iter() {
         let mut new_board = board.clone();
-        new_board.set_cell(*m, *cell);
+        new_board.set_cell_force(*m, *cell);
         let score = minimax_score(
             &mut new_board,
             cell,
@@ -91,9 +94,9 @@ fn minimax_score(
     if is_maximizing {
         let mut value = i64::min_value();
         for idx in moves {
-            board.set_cell(idx, *cell);
+            board.set_cell_force(idx, *cell);
             let score = minimax_score(
-                board,
+                &mut board.clone(),
                 &cell.opposite(),
                 depth - 1,
                 false,
@@ -107,7 +110,7 @@ fn minimax_score(
             if score >= alpha {
                 alpha = score;
             }
-            board.set_cell(idx, GameCell::Empty);
+            board.set_cell_force(idx, GameCell::Empty);
             if beta <= alpha {
                 break;
             }
@@ -119,7 +122,7 @@ fn minimax_score(
     } else {
         let mut value = i64::max_value();
         for idx in moves {
-            board.set_cell(idx, cell.opposite());
+            board.set_cell_force(idx, cell.opposite());
             let score = minimax_score(
                 board,
                 &cell.opposite(),
@@ -135,7 +138,7 @@ fn minimax_score(
             if score <= beta {
                 beta = score;
             }
-            board.set_cell(idx, GameCell::Empty);
+            board.set_cell_force(idx, GameCell::Empty);
             if beta <= alpha {
                 break;
             }
@@ -193,13 +196,13 @@ mod tests {
         let mut board = Board::new();
         let mut cell = GameCell::Cross;
         println!("{:?}", board.cells);
-        let mut  i = 0;
+        let mut i = 0;
         loop {
             assert_eq!(State::Empty, board.get_state());
             println!("{:?}", board.cells);
             let mov = get_pos(Opponent::Minimax, &board, &cell).unwrap();
             assert_eq!(true, board.available_moves().contains(&mov));
-            board.set_cell(mov, cell);
+            board.set_cell(mov, cell).unwrap();
             if board.get_state() != State::Empty {
                 break;
             }

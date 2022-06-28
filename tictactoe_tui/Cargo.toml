@@ -1,0 +1,20 @@
+[package]
+name = "tictactoe_tui"
+version = "1.2.1"
+edition = "2021"
+license = "MIT"
+authors = ["Ceres445 <42400528+Ceres445@users.noreply.github.com>"]
+description = "Play Tic Tac Toe in the terminal"
+repository = "https://github.com/Ceres445/TicTacToeTUI"
+keywords = ["cli", "tui", "tictactoe"]
+
+[dependencies]
+tui = {version = "0.18", features = ['crossterm'], default-features = false}
+crossterm = "0.23"
+tictactoe_library = {path = "../tictactoe_library"}
+
+
+[[bin]]
+bench = false
+path = "src/main.rs"
+name = "tic-tac-toe"

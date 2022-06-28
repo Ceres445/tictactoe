@@ -1,10 +1,9 @@
 use core::fmt;
 
-use adorn::adorn_method;
-
 use crate::{
     app::Score,
     player::{get_pos, Opponent},
+    update::{Move, Position},
 };
 
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -67,7 +66,16 @@ impl Board {
         Some(self.cells.get(pos.y)?.get(pos.x)?)
     }
 
-    pub fn set_cell(&mut self, pos: Position, cell: GameCell) {
+    pub fn set_cell(&mut self, pos: Position, cell: GameCell) -> Result<(), String> {
+        if self.get_cell(pos) == Some(&GameCell::Empty) {
+            self.cells[pos.y][pos.x] = cell;
+            Ok(())
+        } else {
+            Err("Cell is not empty".to_string())
+        }
+    }
+
+    pub fn set_cell_force(&mut self, pos: Position, cell: GameCell) {
         self.cells[pos.y][pos.x] = cell;
     }
 
@@ -149,18 +157,6 @@ pub enum GameState {
     GameInProgress(Cells, Player, Position),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Position {
-    pub x: usize,
-    pub y: usize,
-}
-
-impl Position {
-    pub fn to_tuple(&self) -> (usize, usize) {
-        (self.y, self.x)
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Player {
     Player1,
@@ -197,7 +193,6 @@ pub struct Game {
     pub current_position: Position,
     pub current_player: Player,
     pub winner: Option<Player>,
-    pub warning_message: Option<String>,
     pub opponent: Opponent,
     should_continue: bool,
     state_changed: bool,
@@ -212,7 +207,6 @@ impl Game {
             winner: None,
             opponent,
             should_continue: true,
-            warning_message: None,
             state_changed: true,
         }
     }
@@ -224,32 +218,90 @@ impl Game {
         }
     }
 
-    fn opponent_move(&mut self) {
+    pub fn update(&mut self, mov: Move) -> Result<GameState, String> {
+        match mov {
+            Move::Up => {
+                if self.current_position.y > 0 {
+                    self.current_position.y -= 1;
+
+                    self.state_changed = true;
+                    Ok(self.get_state().unwrap())
+                } else {
+                    Err("Cannot move up".to_string())
+                }
+            }
+            Move::Down => {
+                if self.current_position.y < 2 {
+                    self.current_position.y += 1;
+
+                    self.state_changed = true;
+                    Ok(self.get_state().unwrap())
+                } else {
+                    Err("Cannot move down".to_string())
+                }
+            }
+            Move::Left => {
+                if self.current_position.x > 0 {
+                    self.current_position.x -= 1;
+
+                    self.state_changed = true;
+                    Ok(self.get_state().unwrap())
+                } else {
+                    Err("Cannot move left".to_string())
+                }
+            }
+            Move::Right => {
+                if self.current_position.x < 2 {
+                    self.current_position.x += 1;
+
+                    self.state_changed = true;
+                    Ok(self.get_state().unwrap())
+                } else {
+                    Err("Cannot move down".to_string())
+                }
+            }
+            Move::Place => match self.place() {
+                Ok(_) => {
+                    self.state_changed = true;
+                    Ok(self.get_state().unwrap())
+                }
+                Err(e) => Err(e),
+            },
+            Move::PlaceAt(pos) => match self.board.set_cell(pos, self.get_current_player_cell()) {
+                Ok(_) => {
+                    self.state_changed = true;
+                    Ok(self.get_state().unwrap())
+                }
+                Err(e) => Err(e),
+            },
+        }
+    }
+
+    fn opponent_move(&mut self) -> Result<(), String> {
         let pos = match get_pos(
             self.opponent.clone(),
             &self.board,
             &self.current_player.get_cell(),
         ) {
             Ok(pos) => pos,
-            Err(e) => {
-                self.warning_message = Some(e.to_string());
-                return;
-            }
+            Err(e) => return Err(e),
         };
-        self.board.set_cell(pos, self.current_player.get_cell());
-        self.next();
+        match self.board.set_cell(pos, self.current_player.get_cell()) {
+            Ok(_) => self.next(),
+            Err(e) => Err(e),
+        }
     }
 
-    fn next(&mut self) {
+    fn next(&mut self) -> Result<(), String> {
         match self.board.get_state() {
             State::Empty => {
                 self.current_player = self.current_player.next();
                 self.state_changed = true;
                 if let Opponent::Human = self.opponent {
-                    return;
+                    return Ok(());
                 }
                 if let Player::Player2 = self.current_player {
-                    self.opponent_move();
+                    return self.opponent_move();
                 }
             }
             State::Win(_) => {
@@ -261,6 +313,7 @@ impl Game {
                 self.should_continue = false;
             }
         }
+        Ok(())
     }
     pub fn is_over(&self) -> bool {
         self.should_continue == false
@@ -282,28 +335,23 @@ impl Game {
             Score::new()
         }
     }
-    pub fn get_warning_message(&self) -> Option<String> {
-        self.warning_message.clone()
-    }
-    pub fn place(&mut self) {
+    pub fn place(&mut self) -> Result<(), String> {
         self.state_changed = true;
-        self.warning_message = None;
         if let Some(cell) = self.board.get_cell(self.current_position.clone()) {
             match cell {
                 GameCell::Empty => {
-                    self.board.set_cell(
+                    return match self.board.set_cell(
                         self.current_position.clone(),
                         self.get_current_player_cell(),
-                    );
-                    self.next();
+                    ) {
+                        Ok(_) => self.next(),
+                        Err(e) => Err(e),
+                    }
                 }
-                _ => {
-                    self.warning_message = Some("This cell is already taken!".to_string());
-                    return;
-                }
+                _ => Err("This cell is already taken!".to_string()),
             }
         } else {
-            self.warning_message = Some("This cell is out of bounds!".to_string());
+            Err("This cell is out of bounds!".to_string())
         }
     }
 
@@ -323,50 +371,6 @@ impl Game {
             None
         }
     }
-
-    fn wrap<F>(&mut self, func: F)
-    where
-        F: Fn(&mut Self),
-    {
-        if self.should_continue {
-            self.state_changed = true;
-            func(self);
-        } else {
-            self.warning_message = Some("Game is over!".to_string());
-        }
-    }
-
-    #[adorn_method(wrap)]
-    pub fn on_up(&mut self) {
-        self.warning_message = None;
-        if self.current_position.y > 0 {
-            self.current_position.y -= 1;
-        }
-    }
-
-    #[adorn_method(wrap)]
-    pub fn on_down(&mut self) {
-        self.warning_message = None;
-        if self.current_position.y < 2 {
-            self.current_position.y += 1;
-        }
-    }
-
-    #[adorn_method(wrap)]
-    pub fn on_left(&mut self) {
-        self.warning_message = None;
-        if self.current_position.x > 0 {
-            self.current_position.x -= 1;
-        }
-    }
-
-    #[adorn_method(wrap)]
-    pub fn on_right(&mut self) {
-        self.warning_message = None;
-        if self.current_position.x < 2 {
-            self.current_position.x += 1;
-        }
-    }
 }
 
 // write tests
@@ -377,33 +381,33 @@ mod tests {
     #[test]
     fn test_up() {
         let mut game = Game::new(Opponent::Human);
-        game.current_position = Position { x: 0, y: 0 };
-        game.on_down();
-        assert_eq!(game.current_position, Position { x: 0, y: 1 });
+        game.current_position = Position { x: 0, y: 1 };
+        game.update(Move::Up).unwrap();
+        assert_eq!(game.current_position, Position { x: 0, y: 0 });
     }
 
     #[test]
     fn test_down() {
         let mut game = Game::new(Opponent::Human);
-        game.current_position = Position { x: 0, y: 2 };
-        game.on_up();
-        assert_eq!(game.current_position, Position { x: 0, y: 1 });
+        game.current_position = Position { x: 0, y: 1 };
+        game.update(Move::Down).unwrap();
+        assert_eq!(game.current_position, Position { x: 0, y: 2 });
     }
 
     #[test]
     fn test_left() {
         let mut game = Game::new(Opponent::Human);
-        game.current_position = Position { x: 0, y: 0 };
-        game.on_right();
-        assert_eq!(game.current_position, Position { x: 1, y: 0 });
+        game.current_position = Position { x: 1, y: 0 };
+        game.update(Move::Left).unwrap();
+        assert_eq!(game.current_position, Position { x: 0, y: 0 });
     }
 
     #[test]
     fn test_right() {
         let mut game = Game::new(Opponent::Human);
-        game.current_position = Position { x: 2, y: 0 };
-        game.on_left();
-        assert_eq!(game.current_position, Position { x: 1, y: 0 });
+        game.current_position = Position { x: 1, y: 0 };
+        game.update(Move::Right).unwrap();
+        assert_eq!(game.current_position, Position { x: 2, y: 0 });
     }
 
     #[test]
@@ -411,7 +415,7 @@ mod tests {
         let mut game = Game::new(Opponent::Human);
         game.current_position = Position { x: 0, y: 0 };
         assert_eq!(game.current_player, Player::Player1);
-        game.place();
+        game.place().unwrap();
         assert_eq!(
             game.board.get_cell(Position { x: 0, y: 0 }),
             Some(&GameCell::Cross)
@@ -420,8 +424,8 @@ mod tests {
         assert_eq!(game.current_position, Position { x: 0, y: 0 });
         println!("{:?}", game.board.cells);
 
-        game.on_right();
-        game.place();
+        game.update(Move::Right).unwrap();
+        game.place().unwrap();
         println!("{:?}", game.board.cells);
         assert_eq!(game.board.get_state(), State::Empty);
         assert_eq!(game.current_player, Player::Player1);
@@ -436,7 +440,7 @@ mod tests {
     fn test_minimax() {
         let mut game = Game::new(Opponent::Minimax);
         game.current_position = Position { x: 0, y: 0 };
-        game.place();
+        game.place().unwrap();
         assert_eq!(
             game.board.get_cell(Position { x: 0, y: 0 }),
             Some(&GameCell::Cross)
@@ -449,7 +453,7 @@ mod tests {
     fn test_random() {
         let mut game = Game::new(Opponent::Random);
         game.current_position = Position { x: 0, y: 0 };
-        game.place();
+        game.place().unwrap();
         assert_eq!(
             game.board.get_cell(Position { x: 0, y: 0 }),
             Some(&GameCell::Cross)
