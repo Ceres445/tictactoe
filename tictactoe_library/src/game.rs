@@ -1,69 +1,28 @@
 use core::fmt;
 
 use crate::{
-    app::Score,
-    player::{get_pos, Opponent},
-    update::{Move, Position},
+    player::get_pos,
+    update::{GameCell, Move, Opponent, Position, Score},
 };
 
-#[derive(Clone, PartialEq, Copy, Debug)]
-pub enum GameCell {
-    Empty,
-    Cross,
-    Circle,
-}
-
-impl GameCell {
-    pub fn opposite(&self) -> Self {
-        match self {
-            GameCell::Cross => GameCell::Circle,
-            GameCell::Circle => GameCell::Cross,
-            _ => GameCell::Empty,
-        }
-    }
-}
-
-impl GameCell {
-    pub fn to_text(&self, pos: Option<(usize, usize)>) -> String {
-        let centre = match self {
-            GameCell::Empty => String::from("L"),
-            GameCell::Cross => String::from("X"),
-            GameCell::Circle => String::from("O"),
-        };
-        // TODO: Print proper positions with borders
-        match pos {
-            Some((x, y)) => match (x, y) {
-                (0, 0) => format!("{}", centre),
-                (0, 1) => format!("{}", centre),
-                (0, 2) => format!("{}", centre),
-                (1, 0) => format!("{}", centre),
-                (1, 1) => format!("{}", centre),
-                (1, 2) => format!("{}", centre),
-                (2, 0) => format!("{}", centre),
-                (2, 1) => format!("{}", centre),
-                (2, 2) => format!("{}", centre),
-                _ => panic!("Invalid coordinates: {}, {}", x, y),
-            },
-            None => centre,
-        }
-    }
-}
+use serde::{Deserialize, Serialize};
 
 pub type Cells = Vec<Vec<GameCell>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Board {
     pub cells: Cells,
 }
 
 impl Board {
-    pub fn new() -> Board {
+    pub fn default() -> Board {
         Board {
             cells: vec![vec![GameCell::Empty; 3]; 3],
         }
     }
+
     pub fn get_cell(&self, pos: Position) -> Option<&GameCell> {
-        Some(self.cells.get(pos.y)?.get(pos.x)?)
+        self.cells.get(pos.y)?.get(pos.x)
     }
 
     pub fn set_cell(&mut self, pos: Position, cell: GameCell) -> Result<(), String> {
@@ -117,12 +76,12 @@ impl Board {
             .iter()
             .map(|row| check(row[0], row[1], row[2]))
             .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
         let cols = (0..3)
             .map(|col| check(cells[0][col], cells[1][col], cells[2][col]))
             .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
         let diag1 = check(cells[0][0], cells[1][1], cells[2][2]).unwrap_or(GameCell::Empty);
         let diag2 = check(cells[0][2], cells[1][1], cells[2][0]).unwrap_or(GameCell::Empty);
@@ -151,13 +110,13 @@ pub enum State {
     Draw,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GameState {
     GameOver(Option<Player>, Cells),
     GameInProgress(Cells, Player, Position),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Player {
     Player1,
     Player2,
@@ -188,6 +147,7 @@ impl fmt::Display for Player {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Game {
     pub board: Board,
     pub current_position: Position,
@@ -201,8 +161,8 @@ pub struct Game {
 impl Game {
     pub fn new(opponent: Opponent) -> Game {
         Game {
-            board: Board::new(),
-            current_position: Position { x: 0, y: 0 },
+            board: Board::default(),
+            current_position: Position::default(),
             current_player: Player::Player1,
             winner: None,
             opponent,
@@ -257,7 +217,7 @@ impl Game {
                     self.state_changed = true;
                     Ok(self.get_state().unwrap())
                 } else {
-                    Err("Cannot move down".to_string())
+                    Err("Cannot move right".to_string())
                 }
             }
             Move::Place => match self.place() {
@@ -278,11 +238,7 @@ impl Game {
     }
 
     fn opponent_move(&mut self) -> Result<(), String> {
-        let pos = match get_pos(
-            self.opponent.clone(),
-            &self.board,
-            &self.current_player.get_cell(),
-        ) {
+        let pos = match get_pos(self.opponent, &self.board, &self.current_player.get_cell()) {
             Ok(pos) => pos,
             Err(e) => return Err(e),
         };
@@ -298,6 +254,8 @@ impl Game {
                 self.current_player = self.current_player.next();
                 self.state_changed = true;
                 if let Opponent::Human = self.opponent {
+                    return Ok(());
+                } else if let Opponent::Online = self.opponent {
                     return Ok(());
                 }
                 if let Player::Player2 = self.current_player {
@@ -316,34 +274,28 @@ impl Game {
         Ok(())
     }
     pub fn is_over(&self) -> bool {
-        self.should_continue == false
+        !self.should_continue
     }
 
     pub fn get_score(&self) -> Score {
         if self.winner.is_some() {
             match self.winner.unwrap() {
-                Player::Player1 => Score {
-                    player1: 1,
-                    player2: 0,
-                },
-                Player::Player2 => Score {
-                    player1: 0,
-                    player2: 1,
-                },
+                Player::Player1 => Score { player1: 1, player2: 0 },
+                Player::Player2 => Score { player1: 0, player2: 1 },
             }
         } else {
-            Score::new()
+            Score::default()
         }
     }
     pub fn place(&mut self) -> Result<(), String> {
         self.state_changed = true;
-        if let Some(cell) = self.board.get_cell(self.current_position.clone()) {
+        if let Some(cell) = self.board.get_cell(self.current_position) {
             match cell {
                 GameCell::Empty => {
-                    return match self.board.set_cell(
-                        self.current_position.clone(),
-                        self.get_current_player_cell(),
-                    ) {
+                    match self
+                        .board
+                        .set_cell(self.current_position, self.get_current_player_cell())
+                    {
                         Ok(_) => self.next(),
                         Err(e) => Err(e),
                     }
@@ -364,7 +316,7 @@ impl Game {
                 Some(GameState::GameInProgress(
                     self.board.cells.clone(),
                     self.current_player,
-                    self.current_position.clone(),
+                    self.current_position,
                 ))
             }
         } else {
@@ -416,10 +368,7 @@ mod tests {
         game.current_position = Position { x: 0, y: 0 };
         assert_eq!(game.current_player, Player::Player1);
         game.place().unwrap();
-        assert_eq!(
-            game.board.get_cell(Position { x: 0, y: 0 }),
-            Some(&GameCell::Cross)
-        );
+        assert_eq!(game.board.get_cell(Position { x: 0, y: 0 }), Some(&GameCell::Cross));
         assert_eq!(game.current_player, Player::Player2);
         assert_eq!(game.current_position, Position { x: 0, y: 0 });
         println!("{:?}", game.board.cells);
@@ -430,10 +379,7 @@ mod tests {
         assert_eq!(game.board.get_state(), State::Empty);
         assert_eq!(game.current_player, Player::Player1);
         assert_eq!(game.current_position, Position { x: 1, y: 0 });
-        assert_eq!(
-            game.board.get_cell(Position { x: 1, y: 0 }),
-            Some(&GameCell::Circle)
-        );
+        assert_eq!(game.board.get_cell(Position { x: 1, y: 0 }), Some(&GameCell::Circle));
     }
 
     #[test]
@@ -441,10 +387,7 @@ mod tests {
         let mut game = Game::new(Opponent::Minimax);
         game.current_position = Position { x: 0, y: 0 };
         game.place().unwrap();
-        assert_eq!(
-            game.board.get_cell(Position { x: 0, y: 0 }),
-            Some(&GameCell::Cross)
-        );
+        assert_eq!(game.board.get_cell(Position { x: 0, y: 0 }), Some(&GameCell::Cross));
         assert_eq!(game.current_player, Player::Player1);
         assert_eq!(game.current_position, Position { x: 0, y: 0 });
     }
@@ -454,10 +397,7 @@ mod tests {
         let mut game = Game::new(Opponent::Random);
         game.current_position = Position { x: 0, y: 0 };
         game.place().unwrap();
-        assert_eq!(
-            game.board.get_cell(Position { x: 0, y: 0 }),
-            Some(&GameCell::Cross)
-        );
+        assert_eq!(game.board.get_cell(Position { x: 0, y: 0 }), Some(&GameCell::Cross));
         assert_eq!(game.current_player, Player::Player1);
         assert_eq!(game.current_position, Position { x: 0, y: 0 });
         assert_eq!(game.board.moves(), 2);
@@ -474,59 +414,14 @@ mod tests {
             vec![GameCell::Cross, GameCell::Empty, GameCell::Empty],
         ];
         assert_eq!(game.board.moves(), 3);
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 1, y: 0 }),
-            true
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 1, y: 1 }),
-            true
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 1, y: 2 }),
-            true
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 2, y: 0 }),
-            true
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 2, y: 1 }),
-            true
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 2, y: 2 }),
-            true
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 0, y: 1 }),
-            false
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 0, y: 0 }),
-            false
-        );
-        assert_eq!(
-            game.board
-                .available_moves()
-                .contains(&Position { x: 0, y: 2 }),
-            false
-        );
+        assert_eq!(game.board.available_moves().contains(&Position { x: 1, y: 0 }), true);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 1, y: 1 }), true);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 1, y: 2 }), true);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 2, y: 0 }), true);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 2, y: 1 }), true);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 2, y: 2 }), true);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 0, y: 1 }), false);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 0, y: 0 }), false);
+        assert_eq!(game.board.available_moves().contains(&Position { x: 0, y: 2 }), false);
     }
 }

@@ -1,0 +1,12 @@
+[build]
+target = "./static/index.html"
+dist = "./dist"
+
+[watch]
+watch = ["./src/", "./static/"]
+
+
+[[hooks]]
+stage = "pre_build"
+command = "npx"
+command_arguments = ["-c", "tailwindcss -c tailwind.config.js -i ./src/styles/tailwind.css -o ./static/css/output.css --minify"]

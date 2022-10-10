@@ -1,28 +1,23 @@
 use crate::{
-    game::{Board, GameCell, State},
-    update::Position,
+    game::{Board, State},
+    update::{GameCell, Opponent, Position},
 };
 use rand::Rng;
-
-#[derive(Debug, Clone, Copy)]
-pub enum Opponent {
-    Human,
-    Random,
-    Minimax,
-}
 
 pub fn get_pos(player: Opponent, board: &Board, cell: &GameCell) -> Result<Position, String> {
     match player {
         Opponent::Random => random_play(board),
         Opponent::Minimax => minimax_play(board, cell),
         Opponent::Human => Err("Player is not allowed to play".to_string()),
+        Opponent::Online => Err("Player is not allowed to play".to_string()),
+        // Opponent::Online(player) => Err("Use async for online player".to_string()),
     }
 }
 
 fn random_play(board: &Board) -> Result<Position, String> {
     let mut rng = rand::thread_rng();
     let available_moves = board.available_moves();
-    if available_moves.len() == 0 {
+    if available_moves.is_empty() {
         return Err("No available moves".to_string());
     }
     let move_index = rng.gen_range(0..available_moves.len());
@@ -31,7 +26,7 @@ fn random_play(board: &Board) -> Result<Position, String> {
 
 fn minimax_play(board: &Board, cell: &GameCell) -> Result<Position, String> {
     let available_moves = board.available_moves();
-    if available_moves.len() == 0 {
+    if available_moves.is_empty() {
         return Err("No available moves".to_string());
     }
     let best_move = minimax(board, cell);
@@ -47,15 +42,7 @@ fn minimax(board: &Board, cell: &GameCell) -> Result<Position, String> {
     for m in board.available_moves().iter() {
         let mut new_board = board.clone();
         new_board.set_cell_force(*m, *cell);
-        let score = minimax_score(
-            &mut new_board,
-            cell,
-            3,
-            true,
-            i64::min_value(),
-            i64::max_value(),
-            3,
-        );
+        let score = minimax_score(&mut new_board, cell, 3, true, i64::min_value(), i64::max_value(), 3);
         if score > best_score {
             best_move = Some(*m);
             best_score = score;
@@ -87,7 +74,7 @@ fn minimax_score(
     max_depth: i64,
 ) -> i64 {
     let moves = board.available_moves();
-    if depth == 0 || board.get_state() != State::Empty || moves.len() == 0 {
+    if depth == 0 || board.get_state() != State::Empty || moves.is_empty() {
         return evaluate(board, cell);
     }
 
@@ -123,15 +110,7 @@ fn minimax_score(
         let mut value = i64::max_value();
         for idx in moves {
             board.set_cell_force(idx, cell.opposite());
-            let score = minimax_score(
-                board,
-                &cell.opposite(),
-                depth - 1,
-                true,
-                alpha,
-                beta,
-                max_depth,
-            );
+            let score = minimax_score(board, &cell.opposite(), depth - 1, true, alpha, beta, max_depth);
             if score <= value {
                 value = score;
             }
@@ -186,14 +165,14 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let board = Board::new();
+        let board = Board::default();
         let mov = get_pos(Opponent::Random, &board, &GameCell::Cross);
         assert_eq!(true, board.available_moves().contains(&mov.unwrap()));
     }
 
     #[test]
     fn test_minimax() {
-        let mut board = Board::new();
+        let mut board = Board::default();
         let mut cell = GameCell::Cross;
         println!("{:?}", board.cells);
         let mut i = 0;

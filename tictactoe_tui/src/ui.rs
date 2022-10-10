@@ -1,7 +1,7 @@
 use tictactoe_library::{
     app::{App, AppState, Menu},
-    game::{Cells, GameCell, GameState, Player},
-    update::Position,
+    game::{Cells, GameState, Player},
+    update::{Position, GameCell},
 };
 use tui::{
     backend::Backend,
@@ -106,11 +106,9 @@ fn draw_score<B: Backend>(f: &mut Frame<B>, app: &App, rect: &Rect, game_state: 
         .style(Style::default().fg(Color::Yellow))
         .height(2),
         if let GameState::GameInProgress(_, player, _) = game_state {
-            Row::new(vec![Cell::from(format!("{}'s turn", player,))])
-                .style(Style::default().fg(get_color(*player)))
+            Row::new(vec![Cell::from(format!("{}'s turn", player,))]).style(Style::default().fg(get_color(*player)))
         } else {
-            Row::new(vec![Cell::from("Game Over".to_string())])
-                .style(Style::default().fg(Color::Red))
+            Row::new(vec![Cell::from("Game Over".to_string())]).style(Style::default().fg(Color::Red))
         },
     ])
     .block(Block::default().borders(Borders::ALL))
@@ -197,15 +195,18 @@ fn draw_board<B: Backend>(f: &mut Frame<B>, cells: Cells, pos: Position, rect: &
 
 fn draw_info<B: Backend>(f: &mut Frame<B>, rect: &Rect, state: &GameState) {
     let info = match state {
-        GameState::GameInProgress(_, _, _) => "Game in progress...\nPress M/ Esc to open the Game Menu\nPress P to place a piece, Q to \
-            quit, or R to reset the board.\nUse the arrow keys to move the piece.".to_string(),
-        GameState::GameOver(..) => "Game over!\nPress M/ Esc to open the Game Menu\nPress R to reset the board or Q to quit."
-            .to_string(),
+        GameState::GameInProgress(_, _, _) => {
+            "Game in progress...\nPress M/ Esc to open the Game Menu\nPress P to place a piece, Q to \
+            quit, or R to reset the board.\nUse the arrow keys to move the piece."
+                .to_string()
+        }
+        GameState::GameOver(..) => {
+            "Game over!\nPress M/ Esc to open the Game Menu\nPress R to reset the board or Q to quit.".to_string()
+        }
         // TODO:: Add Menu info
         // GameState::Menu(_) => "Tic Tac Toe Menu\nPress Q to quit, or use the up and down arrow keys to select an item."
         //     .to_string(),
     };
-    let text_block =
-        Paragraph::new(info).block(Block::default().title("Info").borders(Borders::ALL));
+    let text_block = Paragraph::new(info).block(Block::default().title("Info").borders(Borders::ALL));
     f.render_widget(text_block, *rect);
 }

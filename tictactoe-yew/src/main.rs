@@ -1,7 +1,7 @@
-mod app;
+mod components;
 
-use app::App;
+use components::app::YewApp;
 
 fn main() {
-    yew::start_app::<App>();
+    yew::start_app::<YewApp>();
 }
